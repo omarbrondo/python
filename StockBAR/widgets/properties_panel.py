@@ -1,11 +1,12 @@
+# widgets/properties_panel.py
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QFormLayout, QLabel,
-    QDoubleSpinBox, QSlider, QHBoxLayout, QPushButton, QSpinBox
+    QDoubleSpinBox, QSlider, QHBoxLayout, QPushButton, QSpinBox, QCheckBox
 )
 from PySide6.QtCore import Qt, Signal
 
+
 class PropertiesPanel(QWidget):
-    # Señal para notificar cambios (opcional)
     properties_changed = Signal()
 
     def __init__(self, parent=None):
@@ -45,9 +46,26 @@ class PropertiesPanel(QWidget):
         self.width_spin.setRange(1, 10000)
         self.height_spin = QSpinBox()
         self.height_spin.setRange(1, 10000)
+        # después de crear width_spin / height_spin
+        self.width_spin.setSingleStep(1)
+        self.height_spin.setSingleStep(1)
+
+        # Asegurar que valueChanged se emite mientras se escribe y con flechas
+        self.width_spin.setKeyboardTracking(True)
+        self.height_spin.setKeyboardTracking(True)
+
+        # Conectar editingFinished para cubrir casos donde valueChanged no se dispare
+        self.width_spin.editingFinished.connect(self._on_wh_changed)
+        self.height_spin.editingFinished.connect(self._on_wh_changed)
+
         wh_layout.addWidget(self.width_spin)
         wh_layout.addWidget(self.height_spin)
         form.addRow(QLabel("Ancho / Alto (px):"), wh_layout)
+
+        # Mantener proporción
+        self.keep_aspect_cb = QCheckBox("Mantener proporción")
+        self.keep_aspect_cb.setChecked(True)
+        form.addRow(self.keep_aspect_cb)
 
         # Botones
         btn_layout = QHBoxLayout()
@@ -68,6 +86,10 @@ class PropertiesPanel(QWidget):
         self.height_spin.valueChanged.connect(self._on_wh_changed)
         self.apply_btn.clicked.connect(self._on_apply_clicked)
         self.reset_btn.clicked.connect(self._on_reset_clicked)
+        # keep_aspect no necesita conexión extra; se lee en _on_wh_changed
+
+        # Estado inicial
+        self.clear_target()
 
     # API pública: asignar el wrapper seleccionado
     def set_target(self, wrapper):
@@ -80,32 +102,46 @@ class PropertiesPanel(QWidget):
 
     def _refresh_ui(self):
         if not self._target:
+            self.setEnabled(False)
+            # valores por defecto visuales
             self.angle_spin.setValue(0)
             self.opacity_slider.setValue(100)
             self.opacity_label.setText("100%")
             self.font_spin.setValue(14)
             self.width_spin.setValue(0)
             self.height_spin.setValue(0)
-            self.setEnabled(False)
+            self.keep_aspect_cb.setChecked(True)
             return
 
         self.setEnabled(True)
+
         # Ángulo
-        angle = self._target.get_angle()
+        try:
+            angle = float(self._target.get_angle())
+        except Exception:
+            angle = 0.0
         self.angle_spin.blockSignals(True)
         self.angle_spin.setValue(angle)
         self.angle_spin.blockSignals(False)
 
         # Opacidad
-        op = int(round(self._target.get_opacity() * 100))
+        try:
+            op = int(round(self._target.get_opacity() * 100))
+        except Exception:
+            op = 100
         self.opacity_slider.blockSignals(True)
         self.opacity_slider.setValue(op)
         self.opacity_label.setText(f"{op}%")
         self.opacity_slider.blockSignals(False)
 
-        # Si es texto, mostrar tamaño de fuente base (si existe)
+        # Tamaño de fuente (si aplica)
+        print("DEBUG child_has_font:", getattr(self._target, "child", None), self._target.child_has_font())
+
         if self._target.child_has_font():
-            base_font = self._target.get_font_size()
+            try:
+                base_font = int(self._target.get_font_size())
+            except Exception:
+                base_font = 14
             self.font_spin.blockSignals(True)
             self.font_spin.setValue(base_font)
             self.font_spin.blockSignals(False)
@@ -114,49 +150,77 @@ class PropertiesPanel(QWidget):
             self.font_spin.setEnabled(False)
 
         # Ancho / Alto (en px) según bounding rect del child
-        w, h = self._target.get_dimensions()
+        try:
+            w, h = self._target.get_dimensions()
+            w = int(round(w))
+            h = int(round(h))
+        except Exception:
+            w, h = 0, 0
+
         self.width_spin.blockSignals(True)
         self.height_spin.blockSignals(True)
-        self.width_spin.setValue(int(round(w)))
-        self.height_spin.setValue(int(round(h)))
+        self.width_spin.setValue(w)
+        self.height_spin.setValue(h)
         self.width_spin.blockSignals(False)
         self.height_spin.blockSignals(False)
 
     # Handlers UI
     def _on_angle_changed(self, value):
-        if not self._target: return
-        self._target.set_angle(value)
-        self.properties_changed.emit()
+        if not self._target:
+            return
+        try:
+            self._target.set_angle(float(value))
+            self.properties_changed.emit()
+        except Exception:
+            pass
 
     def _on_opacity_changed(self, value):
-        if not self._target: return
-        self.opacity_label.setText(f"{value}%")
-        self._target.set_opacity(value / 100.0)
-        self.properties_changed.emit()
+        if not self._target:
+            return
+        try:
+            self.opacity_label.setText(f"{value}%")
+            self._target.set_opacity(value / 100.0)
+            self.properties_changed.emit()
+        except Exception:
+            pass
 
     def _on_font_changed(self, value):
-        if not self._target: return
+        if not self._target:
+            return
         if self._target.child_has_font():
-            # convertimos tamaño absoluto a factor relativo respecto al base_font_size
-            self._target.set_font_size(value)
-            self.properties_changed.emit()
+            try:
+                self._target.set_font_size(int(value))
+                self.properties_changed.emit()
+            except Exception:
+                pass
 
     def _on_wh_changed(self):
-        # cambios en ancho/alto actualizan en tiempo real
-        if not self._target: return
-        w = self.width_spin.value()
-        h = self.height_spin.value()
-        self._target.set_dimensions(w, h)
-        self.properties_changed.emit()
+        if not self._target:
+            return
+        try:
+            w = self.width_spin.value()
+            h = self.height_spin.value()
+            keep = self.keep_aspect_cb.isChecked()
+            # set_dimensions acepta keep_aspect (ver ResizableItem)
+            self._target.set_dimensions(w, h, keep_aspect=keep)
+            self.properties_changed.emit()
+        except Exception:
+            pass
 
     def _on_apply_clicked(self):
-        # ya aplicamos en tiempo real; aquí podemos forzar un refresh
         if self._target:
-            self._target.update_handles()
-            self.properties_changed.emit()
+            try:
+                self._target.update_handles()
+                self.properties_changed.emit()
+            except Exception:
+                pass
 
     def _on_reset_clicked(self):
-        if not self._target: return
-        self._target.reset_to_original()
-        self._refresh_ui()
-        self.properties_changed.emit()
+        if not self._target:
+            return
+        try:
+            self._target.reset_to_original()
+            self._refresh_ui()
+            self.properties_changed.emit()
+        except Exception:
+            pass

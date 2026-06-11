@@ -78,7 +78,7 @@ class ResizableItem(QGraphicsItem):
         self.handles = []
         self._create_handles()
 
-            # --- Métodos públicos para el panel de propiedades ---
+    # --- Métodos públicos para el panel de propiedades ---
 
     def get_angle(self) -> float:
         return self.rotation()
@@ -97,32 +97,40 @@ class ResizableItem(QGraphicsItem):
     def child_has_font(self) -> bool:
         return hasattr(self.child, "resize_font") and hasattr(self.child, "base_font_size")
 
-    def get_font_size(self) -> int:
-        if self.child_has_font():
-            # si el child guarda base_font_size, devolvemos el tamaño actual aproximado
-            try:
-                return int(self.child.base_font_size)
-            except Exception:
-                # fallback: inferir desde font
-                f = self.child.font()
-                return f.pointSize() if f else 14
+        def get_font_size(self) -> int:
+            if self.child_has_font():
+                try:
+                    # Preferir el tamaño de fuente actual del item (puntos flotantes)
+                    f = self.child.font()
+                    pt = f.pointSizeF()
+                    if pt and pt > 0:
+                        return int(round(pt))
+                except Exception:
+                    pass
+                # Fallback al base_font_size si no podemos leer la fuente actual
+                try:
+                    return int(self.child.base_font_size)
+                except Exception:
+                    return 14
         return 0
 
+
     def set_font_size(self, absolute_size: int):
+
         if self.child_has_font():
-            # calcular factor relativo respecto al base_font_size
-            base = getattr(self.child, "base_font_size", None)
-            if base and base > 0:
-                factor = absolute_size / float(base)
-                self.child.resize_font(factor)
+            try:
+                # pasar tamaño absoluto (puntos) al child
+                self.child.resize_font(float(absolute_size))
                 self.update_handles()
+            except Exception:
+                pass
+
 
     def get_dimensions(self):
         br = self.child.boundingRect()
         return br.width(), br.height()
 
-    def set_dimensions(self, width_px: float, height_px: float):
-        # calcular factores respecto al tamaño original guardado
+    def set_dimensions(self, width_px: float, height_px: float, keep_aspect: bool = True):
         orig_w = self.orig_child_rect.width() if self.orig_child_rect.width() > 0 else 1.0
         orig_h = self.orig_child_rect.height() if self.orig_child_rect.height() > 0 else 1.0
         scale_x = width_px / orig_w
@@ -130,11 +138,15 @@ class ResizableItem(QGraphicsItem):
 
         if hasattr(self.child, "resize_pixmap"):
             try:
-                self.child.resize_pixmap(scale_x, scale_y)
+                self.child.resize_pixmap(scale_x, scale_y, keep_aspect=keep_aspect)
             except TypeError:
-                self.child.resize_pixmap((scale_x + scale_y) / 2.0)
+                # fallback si la implementación antigua no acepta keep_aspect
+                if keep_aspect:
+                    scale = (scale_x + scale_y) / 2.0
+                    self.child.resize_pixmap(scale, scale)
+                else:
+                    self.child.resize_pixmap(scale_x, scale_y)
         elif hasattr(self.child, "resize_font"):
-            # para texto, usar media de escalas y aplicar como factor
             factor = (scale_x + scale_y) / 2.0
             self.child.resize_font(factor)
         else:
@@ -142,6 +154,29 @@ class ResizableItem(QGraphicsItem):
             self.child.setScale((scale_x + scale_y) / 2.0)
 
         self.update_handles()
+
+    def _notify_property_change(self):
+        """
+        Notifica al PropertiesPanel del PreviewArea si este wrapper es el target actual.
+        Busca la vista asociada a la escena y llama a _refresh_ui() del panel.
+        """
+        try:
+            sc = self.scene()
+            if not sc:
+                return
+            views = sc.views()
+            if not views:
+                return
+            view = views[0]  # normalmente hay una sola vista
+            panel = getattr(view, "properties_panel", None)
+            if not panel:
+                return
+            # actualizar solo si el panel está mostrando este wrapper
+            if getattr(panel, "_target", None) is self:
+                panel._refresh_ui()
+        except Exception:
+            # no queremos que un error de notificación rompa la interacción
+            pass
 
     def reset_to_original(self):
         # restaurar tamaño y rotación a valores originales
@@ -159,7 +194,7 @@ class ResizableItem(QGraphicsItem):
             except Exception:
                 pass
         self.update_handles()
-
+        self._notify_property_change()
 
     def _create_handles(self):
         self.handles.clear()
@@ -235,8 +270,8 @@ class ResizableItem(QGraphicsItem):
         # detectar rotate_handle usando coords de escena
         local_rh = self.rotate_handle.mapFromScene(scene_pos)
         if self.rotate_handle.contains(local_rh):
+            # iniciar rotación
             self.rotating = True
-            # centro del wrapper en escena (centro del boundingRect del wrapper)
             wrapper_center_local = (self.boundingRect().topLeft() + self.boundingRect().bottomRight()) / 2.0
             center_scene = self.mapToScene(wrapper_center_local)
             self._rotation_center_scene = center_scene
@@ -247,6 +282,7 @@ class ResizableItem(QGraphicsItem):
             # mostrar label
             self.angle_label.setVisible(True)
             self.update_handles()
+            # no consumir más aquí; la rotación se maneja en mouseMoveEvent
             return
 
         # detectar handles de resize (usando escena)
@@ -275,6 +311,8 @@ class ResizableItem(QGraphicsItem):
             display_deg = int(round(deg)) % 360
             self.angle_label.setText(f"{display_deg}°")
             self.update_handles()
+            # notificar panel de propiedades en tiempo real
+            self._notify_property_change()
             return
 
         # resize
@@ -291,12 +329,16 @@ class ResizableItem(QGraphicsItem):
             self._rotation_center_scene = None
             self.angle_label.setVisible(False)
             self.update_handles()
+            # notificar panel con valor final
+            self._notify_property_change()
             return
 
         if getattr(self, "resizing", False):
             self.resizing = False
             self.current_handle = None
             self.update_handles()
+            # notificar panel con valor final
+            self._notify_property_change()
             return
 
         super().mouseReleaseEvent(event)
@@ -330,6 +372,7 @@ class ResizableItem(QGraphicsItem):
             self.child.resize_font(scale)
         elif hasattr(self.child, "resize_pixmap"):
             try:
+                # si la implementación acepta keep_aspect, mantenemos la proporción por defecto
                 self.child.resize_pixmap(scale_x, scale_y)
             except TypeError:
                 self.child.resize_pixmap((scale_x + scale_y) / 2.0)
@@ -338,3 +381,5 @@ class ResizableItem(QGraphicsItem):
             self.child.setScale((scale_x + scale_y) / 2.0)
 
         self.update_handles()
+        # notificar panel de propiedades en tiempo real
+        self._notify_property_change()
