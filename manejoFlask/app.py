@@ -52,6 +52,7 @@ def guardar():
     return redirect(url_for("inicio"))
 
 
+
 @app.route("/limpiar")
 def limpiar():
     return redirect(url_for("inicio"))

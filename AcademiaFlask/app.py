@@ -47,6 +47,21 @@ def agregar():
     
     return render_template('agregar_curso.html', form=form)
 
+from flask import request, jsonify
+
+@app.route('/api/cursos', methods=['POST'])
+def api_agregar_curso():
+    datos = request.get_json() # Recibe el JSON de Postman
+    
+    # Validar que los datos existen
+    if not datos or 'nombre' not in datos:
+        return jsonify({"error": "Datos incompletos"}), 400
+    
+    # Llamamos a tu lógica de servicio
+    agregar_curso(datos['nombre'], datos['instructor'], datos['duracion'])
+    
+    return jsonify({"mensaje": "Curso creado exitosamente"}), 201
+
 # Ruta para editar un curso existente
 @app.route('/editar/<int:id>', methods=['GET', 'POST'])
 def editar(id):

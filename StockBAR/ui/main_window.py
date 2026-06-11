@@ -1,0 +1,127 @@
+from PySide6.QtWidgets import (
+    QWidget, QMainWindow, QVBoxLayout, QHBoxLayout,
+    QLabel, QLineEdit, QPushButton, QFormLayout, QFrame,
+    QRadioButton, QComboBox, QGroupBox
+)
+
+from widgets.preview_area import PreviewArea
+
+class MainWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+
+        self.setWindowTitle("StockBAR - Generador de Etiquetas")
+        self.setMinimumSize(900, 600)
+
+        # --- Panel de selección de tamaño ---
+        size_group = QGroupBox("Tamaño de etiqueta")
+        size_layout = QVBoxLayout()
+
+        # Radio: predefinido
+        self.radio_predef = QRadioButton("Usar tamaño predefinido")
+        self.radio_predef.setChecked(True)
+
+        self.combo_predef = QComboBox()
+        self.combo_predef.addItems([
+            "80 x 50 mm",
+            "58 x 40 mm",
+            "50 x 25 mm",
+            "100 x 70 mm"
+        ])
+
+        # Radio: personalizado
+        self.radio_custom = QRadioButton("Usar tamaño personalizado")
+
+        self.input_ancho = QLineEdit()
+        self.input_ancho.setPlaceholderText("Ancho (mm)")
+        self.input_alto = QLineEdit()
+        self.input_alto.setPlaceholderText("Alto (mm)")
+
+        # Botón crear etiqueta
+        btn_crear = QPushButton("Crear etiqueta")
+        btn_crear.clicked.connect(self.crear_etiqueta)
+
+        # Armar layout
+        size_layout.addWidget(self.radio_predef)
+        size_layout.addWidget(self.combo_predef)
+        size_layout.addWidget(self.radio_custom)
+        size_layout.addWidget(QLabel("Ancho (mm):"))
+        size_layout.addWidget(self.input_ancho)
+        size_layout.addWidget(QLabel("Alto (mm):"))
+        size_layout.addWidget(self.input_alto)
+        size_layout.addWidget(btn_crear)
+
+        size_group.setLayout(size_layout)
+
+        # --- Layout principal ---
+        main_widget = QWidget()
+        main_layout = QHBoxLayout(main_widget)
+
+        # --- Panel izquierdo: formulario ---
+        form_layout = QFormLayout()
+
+        self.input_codigo = QLineEdit()
+        self.input_descripcion = QLineEdit()
+        self.input_cantidad = QLineEdit()
+        
+        form_layout.addRow(size_group)
+        form_layout.addRow("Código:", self.input_codigo)
+        form_layout.addRow("Descripción:", self.input_descripcion)
+        form_layout.addRow("Cantidad:", self.input_cantidad)
+
+        btn_generar = QPushButton("Actualizar Vista Previa")
+        form_layout.addRow(btn_generar)
+        btn_generar.clicked.connect(self.update_preview)
+
+        left_panel = QWidget()
+        left_panel.setLayout(form_layout)
+        left_panel.setMaximumWidth(350)
+        left_panel.setMinimumWidth(250)
+
+        # --- Panel derecho: vista previa ---
+        self.preview = PreviewArea()
+
+        # --- Agregar al layout principal ---
+        main_layout.addWidget(left_panel, 1)
+        main_layout.addWidget(self.preview, 3)
+
+        self.setCentralWidget(main_widget)
+
+    def crear_etiqueta(self):
+        MM_TO_PX = 8
+
+        if self.radio_predef.isChecked():
+            texto = self.combo_predef.currentText()
+            ancho_mm, alto_mm = map(int, texto.replace("mm", "").split(" x "))
+        else:
+            ancho_mm = int(self.input_ancho.text())
+            alto_mm = int(self.input_alto.text())
+
+        ancho_px = ancho_mm * MM_TO_PX
+        alto_px = alto_mm * MM_TO_PX
+
+        self.preview.create_label(ancho_px, alto_px)
+
+    def update_preview(self):
+        if not self.preview.label_item:
+            print("Primero creá una etiqueta.")
+            return
+
+        codigo = self.input_codigo.text()
+        descripcion = self.input_descripcion.text()
+        cantidad = self.input_cantidad.text()
+
+        # Limpiar elementos anteriores
+        for item in self.preview.label_item.items:
+            self.preview.label_item.scene().removeItem(item)
+
+        self.preview.label_item.items.clear()
+
+        # Agregar texto
+        self.preview.add_resizable_text(f"Código: {codigo}", 10, 10)
+        self.preview.add_resizable_text(f"Descripción: {descripcion}", 10, 40)
+        self.preview.add_resizable_text(f"Cantidad: {cantidad}", 10, 70)
+
+        # Agregar código de barras
+        pixmap = self.preview.generate_barcode_pixmap(codigo)
+        self.preview.add_resizable_barcode(pixmap, 10, 120)
