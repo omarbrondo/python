@@ -78,6 +78,89 @@ class ResizableItem(QGraphicsItem):
         self.handles = []
         self._create_handles()
 
+            # --- Métodos públicos para el panel de propiedades ---
+
+    def get_angle(self) -> float:
+        return self.rotation()
+
+    def set_angle(self, degrees: float):
+        self.setRotation(degrees)
+        self.update_handles()
+
+    def get_opacity(self) -> float:
+        return self.opacity()
+
+    def set_opacity(self, value: float):
+        self.setOpacity(max(0.0, min(1.0, value)))
+        self.update_handles()
+
+    def child_has_font(self) -> bool:
+        return hasattr(self.child, "resize_font") and hasattr(self.child, "base_font_size")
+
+    def get_font_size(self) -> int:
+        if self.child_has_font():
+            # si el child guarda base_font_size, devolvemos el tamaño actual aproximado
+            try:
+                return int(self.child.base_font_size)
+            except Exception:
+                # fallback: inferir desde font
+                f = self.child.font()
+                return f.pointSize() if f else 14
+        return 0
+
+    def set_font_size(self, absolute_size: int):
+        if self.child_has_font():
+            # calcular factor relativo respecto al base_font_size
+            base = getattr(self.child, "base_font_size", None)
+            if base and base > 0:
+                factor = absolute_size / float(base)
+                self.child.resize_font(factor)
+                self.update_handles()
+
+    def get_dimensions(self):
+        br = self.child.boundingRect()
+        return br.width(), br.height()
+
+    def set_dimensions(self, width_px: float, height_px: float):
+        # calcular factores respecto al tamaño original guardado
+        orig_w = self.orig_child_rect.width() if self.orig_child_rect.width() > 0 else 1.0
+        orig_h = self.orig_child_rect.height() if self.orig_child_rect.height() > 0 else 1.0
+        scale_x = width_px / orig_w
+        scale_y = height_px / orig_h
+
+        if hasattr(self.child, "resize_pixmap"):
+            try:
+                self.child.resize_pixmap(scale_x, scale_y)
+            except TypeError:
+                self.child.resize_pixmap((scale_x + scale_y) / 2.0)
+        elif hasattr(self.child, "resize_font"):
+            # para texto, usar media de escalas y aplicar como factor
+            factor = (scale_x + scale_y) / 2.0
+            self.child.resize_font(factor)
+        else:
+            self.child.setTransformOriginPoint(self.child.boundingRect().center())
+            self.child.setScale((scale_x + scale_y) / 2.0)
+
+        self.update_handles()
+
+    def reset_to_original(self):
+        # restaurar tamaño y rotación a valores originales
+        self.setRotation(0)
+        self.setOpacity(1.0)
+        # restaurar child a original si es posible
+        if hasattr(self.child, "original_pixmap"):
+            try:
+                self.child.setPixmap(self.child.original_pixmap)
+            except Exception:
+                pass
+        if hasattr(self.child, "base_font_size"):
+            try:
+                self.child.resize_font(1.0)  # factor 1 = base
+            except Exception:
+                pass
+        self.update_handles()
+
+
     def _create_handles(self):
         self.handles.clear()
         for _ in range(8):

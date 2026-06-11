@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (
 
 from widgets.preview_area import PreviewArea
 
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -63,7 +64,7 @@ class MainWindow(QMainWindow):
         self.input_codigo = QLineEdit()
         self.input_descripcion = QLineEdit()
         self.input_cantidad = QLineEdit()
-        
+
         form_layout.addRow(size_group)
         form_layout.addRow("Código:", self.input_codigo)
         form_layout.addRow("Descripción:", self.input_descripcion)
@@ -81,21 +82,35 @@ class MainWindow(QMainWindow):
         # --- Panel derecho: vista previa ---
         self.preview = PreviewArea()
 
-        # --- Agregar al layout principal ---
-        main_layout.addWidget(left_panel, 1)
-        main_layout.addWidget(self.preview, 3)
+        # Obtener el panel de propiedades desde PreviewArea (ya creado dentro de PreviewArea)
+        self.properties_widget = self.preview.properties_panel
+        # Ajustes de ancho del panel de propiedades (centro)
+        self.properties_widget.setMinimumWidth(220)
+        self.properties_widget.setMaximumWidth(360)
+
+        # --- Agregar al layout principal en el orden: formulario | propiedades | preview ---
+        main_layout.addWidget(left_panel, 0)               # izquierda: formulario
+        main_layout.addWidget(self.properties_widget, 0)   # centro: panel de propiedades
+        main_layout.addWidget(self.preview, 1)             # derecha: preview (ocupa resto)
 
         self.setCentralWidget(main_widget)
 
     def crear_etiqueta(self):
         MM_TO_PX = 8
 
-        if self.radio_predef.isChecked():
-            texto = self.combo_predef.currentText()
-            ancho_mm, alto_mm = map(int, texto.replace("mm", "").split(" x "))
-        else:
-            ancho_mm = int(self.input_ancho.text())
-            alto_mm = int(self.input_alto.text())
+        try:
+            if self.radio_predef.isChecked():
+                texto = self.combo_predef.currentText()
+                # texto ejemplo: "80 x 50 mm"
+                parts = texto.split("x")
+                ancho_mm = int(parts[0].strip())
+                alto_mm = int(parts[1].replace("mm", "").strip())
+            else:
+                ancho_mm = int(self.input_ancho.text())
+                alto_mm = int(self.input_alto.text())
+        except Exception:
+            # valores por defecto si hay error de parseo
+            ancho_mm, alto_mm = 80, 50
 
         ancho_px = ancho_mm * MM_TO_PX
         alto_px = alto_mm * MM_TO_PX
@@ -111,17 +126,21 @@ class MainWindow(QMainWindow):
         descripcion = self.input_descripcion.text()
         cantidad = self.input_cantidad.text()
 
-        # Limpiar elementos anteriores
-        for item in self.preview.label_item.items:
-            self.preview.label_item.scene().removeItem(item)
+        # Limpiar elementos anteriores (son wrappers ResizableItem)
+        # Usamos una copia de la lista porque la removemos durante la iteración
+        for item in list(self.preview.label_item.items):
+            # item es el wrapper (ResizableItem); remover de la escena
+            scene = self.preview.label_item.scene()
+            if scene:
+                scene.removeItem(item)
 
         self.preview.label_item.items.clear()
 
-        # Agregar texto
+        # Agregar texto (resizable)
         self.preview.add_resizable_text(f"Código: {codigo}", 10, 10)
         self.preview.add_resizable_text(f"Descripción: {descripcion}", 10, 40)
         self.preview.add_resizable_text(f"Cantidad: {cantidad}", 10, 70)
 
-        # Agregar código de barras
+        # Agregar código de barras (resizable)
         pixmap = self.preview.generate_barcode_pixmap(codigo)
         self.preview.add_resizable_barcode(pixmap, 10, 120)
