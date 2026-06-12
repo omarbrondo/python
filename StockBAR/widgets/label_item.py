@@ -14,20 +14,7 @@ class LabelItem(QGraphicsRectItem):
 
     def add_text(self, text, x, y):
         item = ResizableTextItem(text)
+        item.setBrush(QBrush(Qt.black))
         item.setParentItem(self)
         item.setPos(x, y)
         return item
-
-    def add_barcode(self, pixmap, x, y):
-        item = ResizablePixmapItem(pixmap)
-        item.setParentItem(self)
-        item.setPos(x, y)
-        return item
-    
-    def add_text(self, text, x, y):
-        item = ResizableTextItem(text)
-        item.setDefaultTextColor(Qt.black)
-        item.setParentItem(self)
-        item.setPos(x, y)
-        return item
-

@@ -69,9 +69,7 @@ class PropertiesPanel(QWidget):
 
         # Botones
         btn_layout = QHBoxLayout()
-        self.apply_btn = QPushButton("Aplicar")
         self.reset_btn = QPushButton("Reset")
-        btn_layout.addWidget(self.apply_btn)
         btn_layout.addWidget(self.reset_btn)
 
         layout.addLayout(form)
@@ -84,9 +82,8 @@ class PropertiesPanel(QWidget):
         self.font_spin.valueChanged.connect(self._on_font_changed)
         self.width_spin.valueChanged.connect(self._on_wh_changed)
         self.height_spin.valueChanged.connect(self._on_wh_changed)
-        self.apply_btn.clicked.connect(self._on_apply_clicked)
+        self.keep_aspect_cb.toggled.connect(self._on_keep_aspect_changed)
         self.reset_btn.clicked.connect(self._on_reset_clicked)
-        # keep_aspect no necesita conexión extra; se lee en _on_wh_changed
 
         # Estado inicial
         self.clear_target()
@@ -135,8 +132,6 @@ class PropertiesPanel(QWidget):
         self.opacity_slider.blockSignals(False)
 
         # Tamaño de fuente (si aplica)
-        print("DEBUG child_has_font:", getattr(self._target, "child", None), self._target.child_has_font())
-
         if self._target.child_has_font():
             try:
                 base_font = int(self._target.get_font_size())
@@ -163,6 +158,11 @@ class PropertiesPanel(QWidget):
         self.height_spin.setValue(h)
         self.width_spin.blockSignals(False)
         self.height_spin.blockSignals(False)
+
+        # Mantener proporción: reflejar estado actual del wrapper
+        self.keep_aspect_cb.blockSignals(True)
+        self.keep_aspect_cb.setChecked(getattr(self._target, "keep_aspect", True))
+        self.keep_aspect_cb.blockSignals(False)
 
     # Handlers UI
     def _on_angle_changed(self, value):
@@ -207,13 +207,13 @@ class PropertiesPanel(QWidget):
         except Exception:
             pass
 
-    def _on_apply_clicked(self):
-        if self._target:
-            try:
-                self._target.update_handles()
-                self.properties_changed.emit()
-            except Exception:
-                pass
+    def _on_keep_aspect_changed(self, checked):
+        if not self._target:
+            return
+        try:
+            self._target.set_keep_aspect(bool(checked))
+        except Exception:
+            pass
 
     def _on_reset_clicked(self):
         if not self._target:

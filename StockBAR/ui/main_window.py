@@ -74,6 +74,12 @@ class MainWindow(QMainWindow):
         form_layout.addRow(btn_generar)
         btn_generar.clicked.connect(self.update_preview)
 
+        # Presionar Enter en cualquiera de los campos de texto ejecuta la
+        # misma acción que el botón "Actualizar Vista Previa"
+        self.input_codigo.returnPressed.connect(self.update_preview)
+        self.input_descripcion.returnPressed.connect(self.update_preview)
+        self.input_cantidad.returnPressed.connect(self.update_preview)
+
         left_panel = QWidget()
         left_panel.setLayout(form_layout)
         left_panel.setMaximumWidth(350)

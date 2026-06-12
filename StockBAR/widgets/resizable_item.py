@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import QGraphicsItem, QGraphicsRectItem, QGraphicsSimpleTextItem
-from PySide6.QtGui import QPen, QBrush, QColor, QFont
+from PySide6.QtGui import QPen, QBrush, QColor, QFont, QTransform
 from PySide6.QtCore import QRectF, Qt, QPointF, QSizeF
 import math
 
@@ -23,6 +23,13 @@ class ResizableItem(QGraphicsItem):
         self.setPos(child_pos)
         self.child.setParentItem(self)
         self.child.setPos(0, 0)
+
+        # Escalas independientes en X e Y aplicadas al child vía QTransform
+        self.scale_x = 1.0
+        self.scale_y = 1.0
+
+        # Mantener proporción al redimensionar (controlado por PropertiesPanel)
+        self.keep_aspect = True
 
         # Mantener z-order: wrapper en z original, child por encima
         try:
@@ -97,69 +104,81 @@ class ResizableItem(QGraphicsItem):
     def child_has_font(self) -> bool:
         return hasattr(self.child, "resize_font") and hasattr(self.child, "base_font_size")
 
-        def get_font_size(self) -> int:
-            if self.child_has_font():
-                try:
-                    # Preferir el tamaño de fuente actual del item (puntos flotantes)
-                    f = self.child.font()
-                    pt = f.pointSizeF()
-                    if pt and pt > 0:
-                        return int(round(pt))
-                except Exception:
-                    pass
-                # Fallback al base_font_size si no podemos leer la fuente actual
-                try:
-                    return int(self.child.base_font_size)
-                except Exception:
-                    return 14
-        return 0
-
-
-    def set_font_size(self, absolute_size: int):
-
+    def get_font_size(self) -> int:
         if self.child_has_font():
             try:
-                # pasar tamaño absoluto (puntos) al child
+                f = self.child.font()
+                pt = f.pointSizeF()
+                if pt and pt > 0:
+                    return int(round(pt))
+            except Exception:
+                pass
+            try:
+                return int(self.child.base_font_size)
+            except Exception:
+                return 14
+        return 0
+
+    def set_font_size(self, absolute_size: int):
+        if self.child_has_font():
+            try:
                 self.child.resize_font(float(absolute_size))
+                # al cambiar la fuente, el bounding rect base cambia: reseteamos
+                # las escalas para que el tamaño numérico reportado coincida
+                # con el nuevo bounding rect real.
+                self.orig_child_rect = self.child.boundingRect()
+                self.scale_x = 1.0
+                self.scale_y = 1.0
+                self._apply_transform()
                 self.update_handles()
             except Exception:
                 pass
 
-
     def get_dimensions(self):
         br = self.child.boundingRect()
-        return br.width(), br.height()
+        w = br.width() * self.scale_x
+        h = br.height() * self.scale_y
+        return w, h
+
+    def _apply_transform(self):
+        """Aplica las escalas independientes X/Y al child mediante QTransform."""
+        self.prepareGeometryChange()
+        t = QTransform()
+        t.scale(self.scale_x, self.scale_y)
+        self.child.setTransform(t)
+
+    def set_keep_aspect(self, value: bool):
+        self.keep_aspect = bool(value)
 
     def set_dimensions(self, width_px: float, height_px: float, keep_aspect: bool = True):
-        orig_w = self.orig_child_rect.width() if self.orig_child_rect.width() > 0 else 1.0
-        orig_h = self.orig_child_rect.height() if self.orig_child_rect.height() > 0 else 1.0
-        scale_x = width_px / orig_w
-        scale_y = height_px / orig_h
+        self.keep_aspect = keep_aspect
 
-        if hasattr(self.child, "resize_pixmap"):
-            try:
-                self.child.resize_pixmap(scale_x, scale_y, keep_aspect=keep_aspect)
-            except TypeError:
-                # fallback si la implementación antigua no acepta keep_aspect
-                if keep_aspect:
-                    scale = (scale_x + scale_y) / 2.0
-                    self.child.resize_pixmap(scale, scale)
-                else:
-                    self.child.resize_pixmap(scale_x, scale_y)
-        elif hasattr(self.child, "resize_font"):
-            factor = (scale_x + scale_y) / 2.0
-            self.child.resize_font(factor)
-        else:
-            self.child.setTransformOriginPoint(self.child.boundingRect().center())
-            self.child.setScale((scale_x + scale_y) / 2.0)
+        base_rect = self.child.boundingRect()
+        base_w = base_rect.width() if base_rect.width() > 0 else 1.0
+        base_h = base_rect.height() if base_rect.height() > 0 else 1.0
 
+        new_scale_x = width_px / base_w
+        new_scale_y = height_px / base_h
+
+        if keep_aspect:
+            current_w = base_w * self.scale_x
+            current_h = base_h * self.scale_y
+            if current_w > 0 and abs(width_px - current_w) >= abs(height_px - current_h):
+                factor = new_scale_x
+            else:
+                factor = new_scale_y
+            new_scale_x = factor
+            new_scale_y = factor
+
+        new_scale_x = max(0.01, new_scale_x)
+        new_scale_y = max(0.01, new_scale_y)
+
+        self.scale_x = new_scale_x
+        self.scale_y = new_scale_y
+        self._apply_transform()
         self.update_handles()
 
     def _notify_property_change(self):
-        """
-        Notifica al PropertiesPanel del PreviewArea si este wrapper es el target actual.
-        Busca la vista asociada a la escena y llama a _refresh_ui() del panel.
-        """
         try:
             sc = self.scene()
             if not sc:
@@ -167,22 +186,18 @@ class ResizableItem(QGraphicsItem):
             views = sc.views()
             if not views:
                 return
-            view = views[0]  # normalmente hay una sola vista
+            view = views[0]
             panel = getattr(view, "properties_panel", None)
             if not panel:
                 return
-            # actualizar solo si el panel está mostrando este wrapper
             if getattr(panel, "_target", None) is self:
                 panel._refresh_ui()
         except Exception:
-            # no queremos que un error de notificación rompa la interacción
             pass
 
     def reset_to_original(self):
-        # restaurar tamaño y rotación a valores originales
         self.setRotation(0)
         self.setOpacity(1.0)
-        # restaurar child a original si es posible
         if hasattr(self.child, "original_pixmap"):
             try:
                 self.child.setPixmap(self.child.original_pixmap)
@@ -190,9 +205,13 @@ class ResizableItem(QGraphicsItem):
                 pass
         if hasattr(self.child, "base_font_size"):
             try:
-                self.child.resize_font(1.0)  # factor 1 = base
+                self.child.resize_font(self.child.base_font_size)
             except Exception:
                 pass
+        self.orig_child_rect = self.child.boundingRect()
+        self.scale_x = 1.0
+        self.scale_y = 1.0
+        self._apply_transform()
         self.update_handles()
         self._notify_property_change()
 
@@ -208,7 +227,6 @@ class ResizableItem(QGraphicsItem):
         self.update_handles()
 
     def update_handles(self):
-        # bounding rect del child en coords del child
         child_rect = self.child.boundingRect()
 
         corners = [
@@ -222,31 +240,25 @@ class ResizableItem(QGraphicsItem):
             QPointF(child_rect.left(), child_rect.center().y()),       # 7 left-center
         ]
 
-        # mapFromItem transforma puntos del child a coordenadas de self
         mapped = [self.mapFromItem(self.child, p) for p in corners]
 
         for handle, pos in zip(self.handles, mapped):
             handle.setPos(pos - QPointF(HANDLE_SIZE / 2, HANDLE_SIZE / 2))
 
-        # posicionar rotate_handle sobre el top-center (ROTATE_HANDLE_OFFSET px arriba)
         top_center = self.mapFromItem(
             self.child,
             QPointF(self.child.boundingRect().center().x(), self.child.boundingRect().top())
         )
         self.rotate_handle.setPos(top_center + QPointF(0, -ROTATE_HANDLE_OFFSET))
 
-        # Mostrar rotate handle solo si el wrapper está seleccionado
         self.rotate_handle.setVisible(self.isSelected())
 
-        # posicionar angle_label cerca del rotate_handle (arriba a la derecha)
         rh_pos = self.rotate_handle.pos()
         self.angle_label.setPos(rh_pos + QPointF(ROTATE_HANDLE_SIZE / 2 + 6, -ROTATE_HANDLE_SIZE / 2))
 
-        # proteger acceso a self.rotating por si update_handles se llama muy temprano
         self.angle_label.setVisible(getattr(self, "rotating", False))
 
     def boundingRect(self):
-        # bounding rect del child mapeado a self, expandido por handles y rotate handle
         child_rect = self.child.boundingRect()
         top_left = self.mapFromItem(self.child, child_rect.topLeft())
         bottom_right = self.mapFromItem(self.child, child_rect.bottomRight())
@@ -267,10 +279,8 @@ class ResizableItem(QGraphicsItem):
     def mousePressEvent(self, event):
         scene_pos = event.scenePos()
 
-        # detectar rotate_handle usando coords de escena
         local_rh = self.rotate_handle.mapFromScene(scene_pos)
         if self.rotate_handle.contains(local_rh):
-            # iniciar rotación
             self.rotating = True
             wrapper_center_local = (self.boundingRect().topLeft() + self.boundingRect().bottomRight()) / 2.0
             center_scene = self.mapToScene(wrapper_center_local)
@@ -279,13 +289,10 @@ class ResizableItem(QGraphicsItem):
             dy = scene_pos.y() - center_scene.y()
             self._initial_mouse_angle = math.atan2(dy, dx)
             self._initial_rotation = self.rotation()
-            # mostrar label
             self.angle_label.setVisible(True)
             self.update_handles()
-            # no consumir más aquí; la rotación se maneja en mouseMoveEvent
             return
 
-        # detectar handles de resize (usando escena)
         for i, handle in enumerate(self.handles):
             local = handle.mapFromScene(scene_pos)
             if handle.contains(local):
@@ -298,7 +305,6 @@ class ResizableItem(QGraphicsItem):
     def mouseMoveEvent(self, event):
         scene_pos = event.scenePos()
 
-        # rotación estable usando centro del wrapper
         if getattr(self, "rotating", False) and self._rotation_center_scene is not None:
             dx = scene_pos.x() - self._rotation_center_scene.x()
             dy = scene_pos.y() - self._rotation_center_scene.y()
@@ -311,11 +317,9 @@ class ResizableItem(QGraphicsItem):
             display_deg = int(round(deg)) % 360
             self.angle_label.setText(f"{display_deg}°")
             self.update_handles()
-            # notificar panel de propiedades en tiempo real
             self._notify_property_change()
             return
 
-        # resize
         if getattr(self, "resizing", False) and self.current_handle is not None:
             pos_in_self = self.mapFromScene(scene_pos)
             self._resize(pos_in_self)
@@ -329,7 +333,6 @@ class ResizableItem(QGraphicsItem):
             self._rotation_center_scene = None
             self.angle_label.setVisible(False)
             self.update_handles()
-            # notificar panel con valor final
             self._notify_property_change()
             return
 
@@ -337,49 +340,90 @@ class ResizableItem(QGraphicsItem):
             self.resizing = False
             self.current_handle = None
             self.update_handles()
-            # notificar panel con valor final
             self._notify_property_change()
             return
 
         super().mouseReleaseEvent(event)
 
     def _resize(self, pos):
-        child_pos = self.child.mapFromItem(self, pos)
-        rect = self.child.boundingRect()
+        """
+        Redimensiona el item arrastrando un handle.
 
-        if self.current_handle in [0, 1, 2]:  # top
-            rect.setTop(child_pos.y())
-        if self.current_handle in [4, 5, 6]:  # bottom
-            rect.setBottom(child_pos.y())
-        if self.current_handle in [0, 7, 6]:  # left
-            rect.setLeft(child_pos.x())
-        if self.current_handle in [2, 3, 4]:  # right
-            rect.setRight(child_pos.x())
+        `pos` está en coordenadas locales de self (el wrapper). Para calcular
+        el nuevo tamaño deseado, lo convertimos a coordenadas "base" del child
+        (es decir, sin la transformación de escala actual aplicada), y lo
+        comparamos contra self.orig_child_rect.
+        """
+        inv_transform, ok = self.child.transform().inverted()
+        if not ok:
+            inv_transform = QTransform()
 
-        rect = rect.normalized()
-        if rect.width() < 2 or rect.height() < 2:
+        pos_in_child = self.mapFromItem(self.child, pos)  # incluye transform actual del child
+        base_pos = inv_transform.map(pos_in_child)         # posición en coords "sin escalar"
+
+        rect = self.orig_child_rect
+
+        new_left = rect.left()
+        new_top = rect.top()
+        new_right = rect.right()
+        new_bottom = rect.bottom()
+
+        is_left = self.current_handle in (0, 7, 6)
+        is_right = self.current_handle in (2, 3, 4)
+        is_top = self.current_handle in (0, 1, 2)
+        is_bottom = self.current_handle in (4, 5, 6)
+
+        if is_top:
+            new_top = base_pos.y()
+        if is_bottom:
+            new_bottom = base_pos.y()
+        if is_left:
+            new_left = base_pos.x()
+        if is_right:
+            new_right = base_pos.x()
+
+        new_width = new_right - new_left
+        new_height = new_bottom - new_top
+
+        if new_width < 2 or new_height < 2:
             return
 
-        self.prepareGeometryChange()
+        orig_w = rect.width() if rect.width() > 0 else 1.0
+        orig_h = rect.height() if rect.height() > 0 else 1.0
 
-        orig_w = self.orig_child_rect.width() if self.orig_child_rect.width() > 0 else 1.0
-        orig_h = self.orig_child_rect.height() if self.orig_child_rect.height() > 0 else 1.0
-        scale_x = rect.width() / orig_w
-        scale_y = rect.height() / orig_h
+        new_scale_x = new_width / orig_w
+        new_scale_y = new_height / orig_h
 
-        if hasattr(self.child, "resize_font"):
-            scale = (scale_x + scale_y) / 2.0
-            self.child.resize_font(scale)
-        elif hasattr(self.child, "resize_pixmap"):
-            try:
-                # si la implementación acepta keep_aspect, mantenemos la proporción por defecto
-                self.child.resize_pixmap(scale_x, scale_y)
-            except TypeError:
-                self.child.resize_pixmap((scale_x + scale_y) / 2.0)
+        horizontal_only = (is_left or is_right) and not (is_top or is_bottom)
+        vertical_only = (is_top or is_bottom) and not (is_left or is_right)
+
+        if self.keep_aspect:
+            if horizontal_only:
+                factor = new_scale_x
+            elif vertical_only:
+                factor = new_scale_y
+            else:
+                # handle de esquina: usar el eje con mayor cambio relativo
+                if abs(new_scale_x - self.scale_x) >= abs(new_scale_y - self.scale_y):
+                    factor = new_scale_x
+                else:
+                    factor = new_scale_y
+            new_scale_x = factor
+            new_scale_y = factor
         else:
-            self.child.setTransformOriginPoint(self.child.boundingRect().center())
-            self.child.setScale((scale_x + scale_y) / 2.0)
+            # Sin mantener proporción: cada handle afecta solo su(s) eje(s).
+            if horizontal_only:
+                new_scale_y = self.scale_y
+            elif vertical_only:
+                new_scale_x = self.scale_x
+            # handle de esquina: ambos ejes cambian de forma independiente
+
+        new_scale_x = max(0.01, new_scale_x)
+        new_scale_y = max(0.01, new_scale_y)
+
+        self.scale_x = new_scale_x
+        self.scale_y = new_scale_y
+        self._apply_transform()
 
         self.update_handles()
-        # notificar panel de propiedades en tiempo real
         self._notify_property_change()

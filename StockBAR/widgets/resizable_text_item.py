@@ -28,12 +28,12 @@ class ResizableTextItem(QGraphicsSimpleTextItem):
         self.setFlag(QGraphicsItem.ItemIsSelectable, False)
         self.setFlag(QGraphicsItem.ItemIsMovable, False)
 
-        def resize_font(self, value):
-            """
-            Interpreta `value` como tamaño absoluto en puntos si es > 0.
-            Si por compatibilidad recibimos un factor (<= 10), lo convertimos a tamaño absoluto
-            usando base_font_size.
-            """
+    def resize_font(self, value):
+        """
+        Interpreta `value` como tamaño absoluto en puntos si es > 0.
+        Si por compatibilidad recibimos un factor (<= 10), lo convertimos a tamaño absoluto
+        usando base_font_size.
+        """
         try:
             v = float(value)
         except Exception:
@@ -64,7 +64,6 @@ class ResizableTextItem(QGraphicsSimpleTextItem):
         # No sobrescribimos base_font_size automáticamente para evitar oscilaciones.
         # Si preferís que base se actualice al nuevo tamaño, descomenta la línea siguiente:
         # self.base_font_size = float(new_pt)
-
 
     def set_text(self, text: str):
         """
