@@ -3,6 +3,10 @@ from PySide6.QtGui import QPen, QBrush, QColor, QFont, QTransform
 from PySide6.QtCore import QRectF, Qt, QPointF, QSizeF
 import math
 
+
+# Wrapper visual que añade comportamiento interactivo a cualquier elemento de la etiqueta.
+# Se encarga de mover, redimensionar, rotar y mostrar controles de edición.
+
 HANDLE_SIZE = 10
 ROTATE_HANDLE_SIZE = 12
 ROTATE_HANDLE_OFFSET = 20  # px above the top-center
@@ -10,6 +14,7 @@ ROTATE_HANDLE_OFFSET = 20  # px above the top-center
 
 class ResizableItem(QGraphicsItem):
     def __init__(self, child_item):
+        # Envuelve un elemento gráfico para añadirle control visual y edición interactiva.
         super().__init__()
 
         # --- child / referencia original ---
@@ -88,20 +93,25 @@ class ResizableItem(QGraphicsItem):
     # --- Métodos públicos para el panel de propiedades ---
 
     def get_angle(self) -> float:
+        # Devuelve el ángulo actual de rotación del elemento.
         return self.rotation()
 
     def set_angle(self, degrees: float):
+        # Aplica una rotación específica al elemento seleccionado.
         self.setRotation(degrees)
         self.update_handles()
 
     def get_opacity(self) -> float:
+        # Devuelve la opacidad actual del elemento, en valor entre 0 y 1.
         return self.opacity()
 
     def set_opacity(self, value: float):
+        # Ajusta la opacidad del elemento y la mantiene dentro del rango válido.
         self.setOpacity(max(0.0, min(1.0, value)))
         self.update_handles()
 
     def child_has_font(self) -> bool:
+        # Indica si el elemento interno soporta cambios de fuente.
         return hasattr(self.child, "resize_font") and hasattr(self.child, "base_font_size")
 
     def get_font_size(self) -> int:
@@ -151,6 +161,7 @@ class ResizableItem(QGraphicsItem):
         self.keep_aspect = bool(value)
 
     def set_dimensions(self, width_px: float, height_px: float, keep_aspect: bool = True):
+        # Ajusta tamaño del elemento según ancho y alto en píxeles.
         self.keep_aspect = keep_aspect
 
         base_rect = self.child.boundingRect()
@@ -227,6 +238,7 @@ class ResizableItem(QGraphicsItem):
         self.update_handles()
 
     def update_handles(self):
+        # Posiciona los puntos de ajuste del elemento según su rectángulo actual.
         child_rect = self.child.boundingRect()
 
         corners = [
@@ -347,6 +359,9 @@ class ResizableItem(QGraphicsItem):
 
     def _resize(self, pos):
         """
+        Redimensiona el elemento arrastrando uno de sus handles.
+        Calcula nuevos tamaños a partir de la posición del cursor y la geometría original.
+
         Redimensiona el item arrastrando un handle.
 
         `pos` está en coordenadas locales de self (el wrapper). Para calcular

@@ -6,10 +6,13 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal
 
 
+# Panel lateral de propiedades del elemento seleccionado.
+# Permite modificar ángulo, opacidad, tamaño, proporción y restaurar el estado original.
 class PropertiesPanel(QWidget):
     properties_changed = Signal()
 
     def __init__(self, parent=None):
+        # Inicializa el panel lateral con controles para modificar el elemento actualmente seleccionado.
         super().__init__(parent)
         self.setMinimumWidth(220)
 
@@ -90,14 +93,17 @@ class PropertiesPanel(QWidget):
 
     # API pública: asignar el wrapper seleccionado
     def set_target(self, wrapper):
+        # Asigna un elemento de la etiqueta como objetivo del panel de edición.
         self._target = wrapper
         self._refresh_ui()
 
     def clear_target(self):
+        # Limpia el objetivo actual cuando no hay ningún elemento seleccionado.
         self._target = None
         self._refresh_ui()
 
     def _refresh_ui(self):
+        # Actualiza los controles del panel para reflejar el estado del elemento actual.
         if not self._target:
             self.setEnabled(False)
             # valores por defecto visuales
@@ -166,6 +172,7 @@ class PropertiesPanel(QWidget):
 
     # Handlers UI
     def _on_angle_changed(self, value):
+        # Aplica la rotación indicada al elemento seleccionado.
         if not self._target:
             return
         try:
@@ -175,6 +182,7 @@ class PropertiesPanel(QWidget):
             pass
 
     def _on_opacity_changed(self, value):
+        # Ajusta la transparencia del elemento y actualiza la etiqueta visual del porcentaje.
         if not self._target:
             return
         try:
@@ -185,6 +193,7 @@ class PropertiesPanel(QWidget):
             pass
 
     def _on_font_changed(self, value):
+        # Cambia el tamaño de la fuente cuando el elemento seleccionado es de tipo texto.
         if not self._target:
             return
         if self._target.child_has_font():
@@ -195,6 +204,7 @@ class PropertiesPanel(QWidget):
                 pass
 
     def _on_wh_changed(self):
+        # Redimensiona el elemento según ancho y alto ingresados por el usuario.
         if not self._target:
             return
         try:
@@ -208,6 +218,7 @@ class PropertiesPanel(QWidget):
             pass
 
     def _on_keep_aspect_changed(self, checked):
+        # Activa o desactiva la restricción de mantener proporciones al escalar.
         if not self._target:
             return
         try:
@@ -216,6 +227,7 @@ class PropertiesPanel(QWidget):
             pass
 
     def _on_reset_clicked(self):
+        # Vuelve al estado original del elemento seleccionado.
         if not self._target:
             return
         try:

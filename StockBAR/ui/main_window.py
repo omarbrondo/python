@@ -9,6 +9,8 @@ from PySide6.QtCore import Qt
 from widgets.preview_area import PreviewArea
 
 
+# Ventana principal de la aplicación.
+# Aquí se construye la interfaz de usuario: formulario, vista previa y panel de propiedades.
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -171,6 +173,7 @@ class MainWindow(QMainWindow):
         """)
 
         # --- Panel de selección de tamaño ---
+        # Este bloque crea la sección donde el usuario elige el tamaño de la etiqueta.
         size_group = QGroupBox("Tamaño de etiqueta")
         size_layout = QVBoxLayout()
         size_layout.setSpacing(10)
@@ -219,12 +222,15 @@ class MainWindow(QMainWindow):
         size_group.setLayout(size_layout)
 
         # --- Layout principal ---
+        # Aquí se organiza la distribución horizontal de la interfaz:
+        # formulario a la izquierda, propiedades en el centro, vista previa a la derecha.
         main_widget = QWidget()
         main_layout = QHBoxLayout(main_widget)
         main_layout.setContentsMargins(20, 20, 20, 20)
         main_layout.setSpacing(20)
 
         # --- Panel izquierdo: formulario (Con estilo de Tarjeta oscura) ---
+        # Este panel reúne los campos para ingresar datos del producto y los botones de acción.
         left_panel = QWidget()
         left_panel.setObjectName("CardPanel") 
         
@@ -284,6 +290,7 @@ class MainWindow(QMainWindow):
         left_panel.setMinimumWidth(320)
 
         # --- Panel derecho: vista previa ---
+        # La vista previa es el lienzo gráfico donde se renderiza la etiqueta editable.
         self.preview = PreviewArea()
         # NOTA: Se quitó el objectName("CardPanel") acá para no romper las barras de desplazamiento
 
@@ -301,6 +308,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(main_widget)
 
     def crear_etiqueta(self):
+        # Crea la etiqueta base usando un tamaño en milímetros convertido a píxeles.
         MM_TO_PX = 8
 
         try:
@@ -321,6 +329,7 @@ class MainWindow(QMainWindow):
         self.preview.create_label(ancho_px, alto_px)
 
     def update_preview(self):
+        # Genera el contenido visual de la etiqueta con código, descripción y cantidad.
         if not self.preview.label_item:
             QMessageBox.information(self, "Aviso", "Primero creá una etiqueta desde el panel de tamaño.")
             return
@@ -345,6 +354,7 @@ class MainWindow(QMainWindow):
         self.preview.add_resizable_barcode(pixmap, 10, 120)
 
     def agregar_imagen(self):
+        # Abre un selector de imágenes y la incorpora a la etiqueta como elemento editable.
         if not self.preview.label_item:
             QMessageBox.warning(self, "Atención", "Primero creá una etiqueta.")
             return

@@ -15,6 +15,8 @@ from PIL import Image
 import io
 
 
+# Lienzo de vista previa de la etiqueta.
+# Gestiona la escena gráfica donde se muestran texto, barras y imágenes.
 class PreviewArea(QGraphicsView):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -42,7 +44,8 @@ class PreviewArea(QGraphicsView):
         self.scene.selectionChanged.connect(self._on_scene_selection_changed)
 
     def create_label(self, width_px, height_px):
-        # eliminar label anterior si existe
+        # Crea un nuevo rectángulo base de etiqueta en la escena gráfica.
+        # Se usa como contenedor de todos los elementos que aparecerán en la vista previa.
         if self.label_item:
             try:
                 self.scene.removeItem(self.label_item)
@@ -58,7 +61,8 @@ class PreviewArea(QGraphicsView):
 
     def generate_barcode_pixmap(self, codigo: str) -> QPixmap:
         """
-        Genera un QPixmap a partir de python-barcode + PIL de forma segura.
+        Genera una imagen de código de barras a partir del texto ingresado.
+        Esta función convierte la barra a un QPixmap para poder insertarla en la etiqueta.
         Evita problemas de stride/bytesPerLine que corren las filas.
         """
         barcode_class = barcode.get_barcode_class("code128")
@@ -78,7 +82,8 @@ class PreviewArea(QGraphicsView):
 
     def add_resizable_text(self, text: str, x: float, y: float):
         """
-        Crea un ResizableTextItem, lo envuelve en ResizableItem y lo parenta a label_item.
+        Añade un bloque de texto editable en la etiqueta.
+        El texto se coloca en una posición inicial y queda listo para mover o modificar.
         """
         if not self.label_item:
             raise RuntimeError("No hay label creado. Llamá a create_label primero.")
@@ -96,7 +101,8 @@ class PreviewArea(QGraphicsView):
 
     def add_resizable_barcode(self, pixmap: QPixmap, x: float, y: float):
         """
-        Crea un ResizablePixmapItem con el pixmap original, lo envuelve y lo parenta.
+        Inserta un código de barras como imagen editable dentro de la etiqueta.
+        Se envuelve en el mecanismo de redimensionado y selección visual.
         """
         if not self.label_item:
             raise RuntimeError("No hay label creado. Llamá a create_label primero.")
@@ -115,7 +121,8 @@ class PreviewArea(QGraphicsView):
 
     def add_resizable_image(self, pixmap: QPixmap, x: float, y: float):
         """
-        Igual que add_resizable_barcode, pero pensado para imágenes
+        Añade una imagen cargada por el usuario a la etiqueta.
+        Si la imagen es demasiado grande, se escala para que quepa de forma razonable.
         agregadas manualmente por el usuario (logos, fotos, etc.).
         Se comporta como cualquier otro elemento: se puede mover,
         redimensionar, rotar y ajustar su opacidad.
@@ -149,7 +156,8 @@ class PreviewArea(QGraphicsView):
 
     def _on_scene_selection_changed(self):
         """
-        Actualiza el PropertiesPanel con el primer ResizableItem seleccionado.
+        Detecta qué elemento está seleccionado en la escena y actualiza el panel de propiedades.
+        Esto permite editar el objeto actual desde la interfaz lateral.
         """
         selected = self.scene.selectedItems()
         wrapper = None

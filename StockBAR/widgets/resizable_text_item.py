@@ -4,6 +4,9 @@ from PySide6.QtGui import QFont, QFontMetricsF
 from PySide6.QtCore import QRectF, Qt
 
 
+# Elemento de texto gráfico que puede cambiar de tamaño y medir su propio espacio.
+
+
 class ResizableTextItem(QGraphicsSimpleTextItem):
     """
     QGraphicsSimpleTextItem que soporta:
@@ -14,6 +17,7 @@ class ResizableTextItem(QGraphicsSimpleTextItem):
     """
 
     def __init__(self, text: str = "", parent=None):
+        # Inicializa el texto gráfico con una fuente base y comportamiento de selección desactivado.
         super().__init__(text, parent)
 
         # Inicializar fuente base
@@ -30,6 +34,9 @@ class ResizableTextItem(QGraphicsSimpleTextItem):
 
     def resize_font(self, value):
         """
+        Ajusta el tamaño de la fuente.
+        Si el valor es pequeño se interpreta como factor relativo; si es mayor, como tamaño absoluto en puntos.
+       
         Interpreta `value` como tamaño absoluto en puntos si es > 0.
         Si por compatibilidad recibimos un factor (<= 10), lo convertimos a tamaño absoluto
         usando base_font_size.
@@ -67,7 +74,7 @@ class ResizableTextItem(QGraphicsSimpleTextItem):
 
     def set_text(self, text: str):
         """
-        Actualiza el texto y fuerza recalculo.
+        Reemplaza el texto actual y obliga a recalcular el rectángulo del objeto.
         """
         try:
             self.prepareGeometryChange()
@@ -77,6 +84,7 @@ class ResizableTextItem(QGraphicsSimpleTextItem):
         self.update()
 
     def get_pixel_dimensions(self):
+        # Mide el ancho y alto del texto en píxeles usando la fuente actual.
         fm = QFontMetricsF(self.font())
         rect = fm.boundingRect(self.text())
         return rect.width(), rect.height()

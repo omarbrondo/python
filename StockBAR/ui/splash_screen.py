@@ -16,6 +16,10 @@ from PySide6.QtGui import QPixmap, QFont, QColor
 from PySide6.QtCore import Qt
 
 
+# Pantalla inicial de carga de la aplicación.
+# Se encarga de mostrar una animación visual mientras se prepara la ventana principal.
+
+
 # =========================================================================
 # 1. CONFIGURACIÓN DE IDENTIDAD Y ESTILO — Personalizá aquí tu Splash
 # =========================================================================
@@ -59,6 +63,9 @@ SHADOW_OFFSET = (0, 4)              # Desplazamiento horizontal y vertical (X, Y
 
 class SplashScreen(QSplashScreen):
     """
+    Pantalla de bienvenida visual que se muestra al arrancar la aplicación.
+    Su función es dar una impresión profesional mientras la ventana principal se carga.
+    
     Splash Screen moderno con soporte para bordes redondeados, capas de layout
     limpias, sombras fluidas y barra de carga configurable de forma nativa.
     
@@ -198,15 +205,18 @@ class SplashScreen(QSplashScreen):
         self._center_on_screen(total_width, total_height)
 
     def set_progress(self, value: int):
-        """
-        Permite actualizar el valor de la barra de progreso de forma externa 
-        si se realiza una carga basada en pasos medibles (0-100).
-        """
+       
+        # Actualiza el valor de la barra de progreso.
+        # Se usa cuando la carga se desea mostrar paso a paso.
+        
+        # Permite actualizar el valor de la barra de progreso de forma externa 
+        # si se realiza una carga basada en pasos medibles (0-100).
+        
         if SHOW_PROGRESS_BAR and hasattr(self, 'progress_bar'):
             self.progress_bar.setValue(value)
 
     def _center_on_screen(self, width, height):
-        """Calcula el centro geométrico de la pantalla activa para posicionar el splash."""
+        # """Centra la pantalla de inicio sobre la pantalla activa del sistema."""
         screen = self.screen() if hasattr(self, "screen") else None
         if screen is not None:
             geometry = screen.availableGeometry()
