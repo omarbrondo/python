@@ -15,6 +15,9 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("StockBAR - Generador de Etiquetas")
         self.setMinimumSize(900, 600)
 
+        # --- Forzar inicio maximizado ---
+        # self.showMaximized()
+
         # --- Panel de selección de tamaño ---
         size_group = QGroupBox("Tamaño de etiqueta")
         size_layout = QVBoxLayout()
