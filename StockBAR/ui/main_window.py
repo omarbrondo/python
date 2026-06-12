@@ -1,8 +1,9 @@
 from PySide6.QtWidgets import (
     QWidget, QMainWindow, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QPushButton, QFormLayout, QFrame,
-    QRadioButton, QComboBox, QGroupBox
+    QRadioButton, QComboBox, QGroupBox, QFileDialog, QMessageBox
 )
+from PySide6.QtGui import QPixmap
 
 from widgets.preview_area import PreviewArea
 
@@ -74,6 +75,11 @@ class MainWindow(QMainWindow):
         form_layout.addRow(btn_generar)
         btn_generar.clicked.connect(self.update_preview)
 
+        # Botón para agregar una imagen (logo, etc.) a la etiqueta
+        btn_imagen = QPushButton("Examinar imagen...")
+        btn_imagen.clicked.connect(self.agregar_imagen)
+        form_layout.addRow(btn_imagen)
+
         # Presionar Enter en cualquiera de los campos de texto ejecuta la
         # misma acción que el botón "Actualizar Vista Previa"
         self.input_codigo.returnPressed.connect(self.update_preview)
@@ -132,15 +138,17 @@ class MainWindow(QMainWindow):
         descripcion = self.input_descripcion.text()
         cantidad = self.input_cantidad.text()
 
-        # Limpiar elementos anteriores (son wrappers ResizableItem)
-        # Usamos una copia de la lista porque la removemos durante la iteración
+        # Limpiar elementos anteriores (son wrappers ResizableItem), pero
+        # conservar las imágenes agregadas manualmente por el usuario
+        # (marcadas con is_custom_image=True), ya que esas no se regeneran
+        # automáticamente como el texto/código de barras.
         for item in list(self.preview.label_item.items):
-            # item es el wrapper (ResizableItem); remover de la escena
+            if getattr(item, "is_custom_image", False):
+                continue
             scene = self.preview.label_item.scene()
             if scene:
                 scene.removeItem(item)
-
-        self.preview.label_item.items.clear()
+            self.preview.label_item.items.remove(item)
 
         # Agregar texto (resizable)
         self.preview.add_resizable_text(f"Código: {codigo}", 10, 10)
@@ -150,3 +158,26 @@ class MainWindow(QMainWindow):
         # Agregar código de barras (resizable)
         pixmap = self.preview.generate_barcode_pixmap(codigo)
         self.preview.add_resizable_barcode(pixmap, 10, 120)
+
+    def agregar_imagen(self):
+        if not self.preview.label_item:
+            QMessageBox.warning(self, "Atención", "Primero creá una etiqueta.")
+            return
+
+        filepath, _ = QFileDialog.getOpenFileName(
+            self,
+            "Seleccionar imagen",
+            "",
+            "Imágenes (*.jpg *.jpeg *.png);;Todos los archivos (*)"
+        )
+        if not filepath:
+            return
+
+        pixmap = QPixmap(filepath)
+        if pixmap.isNull():
+            QMessageBox.warning(self, "Error", "No se pudo cargar la imagen seleccionada.")
+            return
+
+        wrapper = self.preview.add_resizable_image(pixmap, 10, 170)
+        if wrapper is not None:
+            wrapper.is_custom_image = True

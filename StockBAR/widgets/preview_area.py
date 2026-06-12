@@ -111,6 +111,41 @@ class PreviewArea(QGraphicsView):
 
         self.label_item.items.append(wrapper)
         wrapper.setSelected(True)
+        return wrapper
+
+    def add_resizable_image(self, pixmap: QPixmap, x: float, y: float):
+        """
+        Igual que add_resizable_barcode, pero pensado para imágenes
+        agregadas manualmente por el usuario (logos, fotos, etc.).
+        Se comporta como cualquier otro elemento: se puede mover,
+        redimensionar, rotar y ajustar su opacidad.
+        """
+        if not self.label_item:
+            raise RuntimeError("No hay label creado. Llamá a create_label primero.")
+
+        # Si la imagen es muy grande respecto a la etiqueta, la escalamos
+        # a un tamaño inicial razonable manteniendo la proporción.
+        label_rect = self.label_item.rect()
+        max_w = max(1, label_rect.width() - x)
+        max_h = max(1, label_rect.height() - y)
+
+        if pixmap.width() > max_w or pixmap.height() > max_h:
+            pixmap = pixmap.scaled(
+                int(max_w), int(max_h),
+                Qt.KeepAspectRatio, Qt.SmoothTransformation
+            )
+
+        pix_item = ResizablePixmapItem(pixmap)
+        pix_item.setParentItem(self.label_item)
+        pix_item.setPos(x, y)
+
+        wrapper = ResizableItem(pix_item)
+        wrapper.setParentItem(self.label_item)
+        wrapper.setZValue(5)
+
+        self.label_item.items.append(wrapper)
+        wrapper.setSelected(True)
+        return wrapper
 
     def _on_scene_selection_changed(self):
         """
