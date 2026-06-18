@@ -157,6 +157,12 @@ class PropertiesPanel(QWidget):
         except Exception:
             w, h = 0, 0
 
+        # Ajustar el máximo del spin para que refleje el tamaño actual del item
+        if w > self.width_spin.maximum():
+            self.width_spin.setMaximum(w)
+        if h > self.height_spin.maximum():
+            self.height_spin.setMaximum(h)
+
         self.width_spin.blockSignals(True)
         self.height_spin.blockSignals(True)
         self.width_spin.setValue(w)
@@ -190,6 +196,8 @@ class PropertiesPanel(QWidget):
         if self._target.child_has_font():
             try:
                 self._target.set_font_size(int(value))
+                # refrescar el panel para que ancho/alto reflejen el nuevo tamaño visual
+                self._refresh_ui()
                 self.properties_changed.emit()
             except Exception:
                 pass

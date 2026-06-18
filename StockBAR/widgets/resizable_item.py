@@ -97,40 +97,48 @@ class ResizableItem(QGraphicsItem):
     def child_has_font(self) -> bool:
         return hasattr(self.child, "resize_font") and hasattr(self.child, "base_font_size")
 
-        def get_font_size(self) -> int:
-            if self.child_has_font():
-                try:
-                    # Preferir el tamaño de fuente actual del item (puntos flotantes)
-                    f = self.child.font()
-                    pt = f.pointSizeF()
-                    if pt and pt > 0:
-                        return int(round(pt))
-                except Exception:
-                    pass
-                # Fallback al base_font_size si no podemos leer la fuente actual
-                try:
-                    return int(self.child.base_font_size)
-                except Exception:
-                    return 14
-        return 0
-
-
-    def set_font_size(self, absolute_size: int):
-
+    def get_font_size(self) -> int:
         if self.child_has_font():
             try:
-                # pasar tamaño absoluto (puntos) al child
+                f = self.child.font()
+                pt = f.pointSizeF()
+                if pt and pt > 0:
+                    return int(round(pt))
+            except Exception:
+                pass
+            try:
+                return int(self.child.base_font_size)
+            except Exception:
+                return 14
+        return 0
+
+    def set_font_size(self, absolute_size: int):
+        if self.child_has_font():
+            try:
+                self.prepareGeometryChange()
                 self.child.resize_font(float(absolute_size))
+                self.orig_child_rect = QRectF(self.child.boundingRect())
                 self.update_handles()
+                self.update()
+                sc = self.scene()
+                if sc is not None:
+                    sc.update()
+                self._notify_property_change()
             except Exception:
                 pass
 
 
     def get_dimensions(self):
-        br = self.child.boundingRect()
-        return br.width(), br.height()
+        try:
+            br = self.child.boundingRect()
+            return br.width(), br.height()
+        except Exception:
+            return 0.0, 0.0
 
     def set_dimensions(self, width_px: float, height_px: float, keep_aspect: bool = True):
+        if width_px <= 0 or height_px <= 0:
+            return
+
         orig_w = self.orig_child_rect.width() if self.orig_child_rect.width() > 0 else 1.0
         orig_h = self.orig_child_rect.height() if self.orig_child_rect.height() > 0 else 1.0
         scale_x = width_px / orig_w
@@ -154,6 +162,8 @@ class ResizableItem(QGraphicsItem):
             self.child.setScale((scale_x + scale_y) / 2.0)
 
         self.update_handles()
+        self.orig_child_rect = QRectF(self.child.boundingRect())
+        self.update()
 
     def _notify_property_change(self):
         """
@@ -368,6 +378,7 @@ class ResizableItem(QGraphicsItem):
         scale_y = rect.height() / orig_h
 
         if hasattr(self.child, "resize_font"):
+            # texto: usar el factor medio para mantener el tamaño visual coherente
             scale = (scale_x + scale_y) / 2.0
             self.child.resize_font(scale)
         elif hasattr(self.child, "resize_pixmap"):
@@ -381,5 +392,6 @@ class ResizableItem(QGraphicsItem):
             self.child.setScale((scale_x + scale_y) / 2.0)
 
         self.update_handles()
+        self.orig_child_rect = QRectF(self.child.boundingRect())
         # notificar panel de propiedades en tiempo real
         self._notify_property_change()
